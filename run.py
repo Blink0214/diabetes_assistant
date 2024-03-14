@@ -1,7 +1,7 @@
-from scripts.shanghai_t2dm import sht2
+from scripts.simu import adolescent
 
 exps = {
-    'sht2': sht2
+    'adolescent': adolescent
 }
 
-exps['sht2']()
+exps['adolescent']()
