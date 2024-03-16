@@ -7,6 +7,7 @@ from torch.utils.data import DataLoader
 from config.args import args, device
 from data.dataset import SIMU
 from experiments.exp import Exp
+from model.micn import MICN
 from model.you_know_who import YKW
 
 
@@ -30,9 +31,12 @@ class Expsimu(Exp):
         test_file = []
         test_label = []
 
+        one_hot_encoded = pd.get_dummies(df['ExtractedValue'])
+        args.classes = one_hot_encoded.shape[1]
+
         for i, (index, row) in enumerate(df.iterrows(), start=1):
             path = os.path.join(directory_path, row['FileName'] + '.csv')
-            label = row['ExtractedValue']
+            label = one_hot_encoded.loc[index].values
             if i % 10 == 0:
                 test_file.append(path)
                 test_label.append(label)
@@ -54,9 +58,9 @@ class Expsimu(Exp):
         self.test_loader = DataLoader(test_dataset, batch_size=args.batch_size, drop_last=True)
 
     def _build_model(self):
-        model = YKW(in_features=args.in_features, out_features=args.out_features,
-                     seq_len=args.seq_len, pred_len=args.pred_len, num_hidden=args.num_hidden,
-                     mic_layers=args.mic_layers, dropout=args.dropout, freq=args.freq, device=device,
+        model = MICN(in_features=args.in_features, seq_len=args.seq_len, pred_len=args.classes,
+                     num_hidden=args.num_hidden, mic_layers=args.mic_layers,
+                    dropout=args.dropout, freq=args.freq, device=device,
                      decomp_kernel=args.decomp_kernel, conv_kernel=args.conv_kernel,
                      isometric_kernel=args.isometric_kernel).float().to(device)
         total_params = sum(p.numel() for p in model.parameters())

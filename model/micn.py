@@ -6,7 +6,7 @@ from model.local_global import series_decomp_multi, Seasonal_Prediction
 
 
 class MICN(nn.Module):
-    def __init__(self, in_features, out_features, seq_len, pred_len,
+    def __init__(self, in_features, seq_len, pred_len, out_features=1,
                  num_hidden=512, mic_layers=2,
                  dropout=0.05, embed='timeF', freq='min',
                  device=torch.device('cuda:0'), mode='regre',

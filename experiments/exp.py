@@ -83,9 +83,8 @@ class Exp(object):
             train_loss = []
             self.model.train()
             epoch_time = time.time()
-            for i, (batch, label) in enumerate(self._train_loader()):
+            for i, (data, mark, label) in enumerate(self._train_loader()):
                 iter_count += 1
-                data, mark = batch
 
                 model_optim.zero_grad()
                 pred = self.model(data.float().to(device), mark.float().to(device))

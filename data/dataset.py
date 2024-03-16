@@ -1,12 +1,12 @@
 import numpy as np
 import pandas as pd
+import torch
 
 from config.args import args
 from torch.utils.data import Dataset
 from utils.timefeature import time_features
 from utils.tools import StandardScaler
-from itertools import accumulate
-
+import torch.nn.functional as F
 
 class SIMU(Dataset):
     def __init__(self, files, labels, mean=None, std=None):

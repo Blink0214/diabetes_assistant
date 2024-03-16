@@ -12,7 +12,6 @@ parser = argparse.ArgumentParser(description='[ML] Machine Learning Experiments 
 parser.add_argument('--dropout', type=float, default=0.05, help='input sequence length')
 parser.add_argument('--freq', type=str, default="min", help='freq for time features encoding')
 parser.add_argument('--in_features', type=int, default=7, help='input features')
-parser.add_argument('--out_features', type=int, default=7, help='output features')
 parser.add_argument('--num_hidden', type=int, default=512, help='dimension size of model')
 parser.add_argument('--univariate', action='store_true', help='use multiple gpus', default=True)
 
