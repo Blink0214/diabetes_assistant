@@ -1,7 +1,8 @@
-from scripts.simu import adolescent
+from scripts.simu import adolescent, rnn
 
 exps = {
-    'adolescent': adolescent
+    'adolescent': adolescent,
+    'rnn': rnn,
 }
 
-exps['adolescent']()
+exps['rnn']()

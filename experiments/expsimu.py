@@ -7,7 +7,7 @@ from torch.utils.data import DataLoader
 from config.args import args, device
 from data.dataset import SIMU
 from experiments.exp import Exp
-from model.micn import MICN
+from model.rnn import SimpleRNN
 from model.you_know_who import YKW
 
 
@@ -16,8 +16,8 @@ class Expsimu(Exp):
         for key, value in kwargs.items():
             setattr(args, key, value)
 
-        setting = f"{name}_if{args.in_features}_of{args.out_features}-seed{args.seed}"
-        super(Expsimu, self).__init__(setting)
+        setting = f"{name}_if{args.in_features}_cls{args.classes}-seed{args.seed}"
+        super(Expsimu, self).__init__(setting, args.model)
         self.params['args'] = args
 
     def _get_data(self):
@@ -57,12 +57,15 @@ class Expsimu(Exp):
         self.vali_loader = DataLoader(vali_dataset, batch_size=args.batch_size, shuffle=True, drop_last=True)
         self.test_loader = DataLoader(test_dataset, batch_size=args.batch_size, drop_last=True)
 
-    def _build_model(self):
-        model = MICN(in_features=args.in_features, seq_len=args.seq_len, pred_len=args.classes,
-                     num_hidden=args.num_hidden, mic_layers=args.mic_layers,
-                    dropout=args.dropout, freq=args.freq, device=device,
-                     decomp_kernel=args.decomp_kernel, conv_kernel=args.conv_kernel,
-                     isometric_kernel=args.isometric_kernel).float().to(device)
+    def _build_model(self, model_str):
+        if model_str == 'ykw':
+            model = YKW(in_features=args.in_features, seq_len=args.seq_len, classes=args.classes,
+                        num_hidden=args.num_hidden, lgf_layers=args.lgf_layers,
+                        dropout=args.dropout, freq=args.freq, device=device,
+                        decomp_kernel=args.decomp_kernel, conv_kernel=args.conv_kernel,
+                        isometric_kernel=args.isometric_kernel).float().to(device)
+        elif model_str == 'rnn':
+            model = SimpleRNN(args.in_features, args.num_hidden, args.classes).float().to(device)
         total_params = sum(p.numel() for p in model.parameters())
         log.info(f'total parameters {total_params} ')
         total_trainable_params = sum(

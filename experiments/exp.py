@@ -10,7 +10,7 @@ from utils.tools import EarlyStopping, adjust_learning_rate
 
 
 class Exp(object):
-    def __init__(self, setting: str):
+    def __init__(self, setting: str, model_str: str):
         log.info(args)
         self.setting = setting
         self.params = {}
@@ -18,7 +18,8 @@ class Exp(object):
         if not os.path.exists(_path):
             os.makedirs(_path)
         self._get_data()
-        self.model = self._build_model()
+        self.model = self._build_model(model_str)
+        print(self.model)
 
     def _train_loader(self):
         raise NotImplementedError
@@ -29,7 +30,7 @@ class Exp(object):
     def _test_loader(self):
         raise NotImplementedError
 
-    def _build_model(self):
+    def _build_model(self, model_str):
         raise NotImplementedError
 
     def _get_data(self):
@@ -52,18 +53,25 @@ class Exp(object):
     def vali(self):
         self.model.eval()
         total_loss = []
+        correct = 0
+        total = 0
 
-        for i, (batch, label) in enumerate(self._vali_loader()):
-            data, mark = batch
-            pred = self.model(data.float().to(device), mark.float().to(device))
+        for i, (data, mark, label) in enumerate(self._vali_loader()):
+            label = label.float().to(device)
+            total += label.size(0)
 
-            loss = self._loss_function(pred, label.float().to(device))
+            pred = self.model(data.float().to(device), mark.float().to(device)) if args.model == 'ykw' else self.model(data.float().to(device))
+            _, predicted = torch.max(pred, 1)
+            _, labels = torch.max(label, 1)
+            correct += (predicted == labels).sum().item()
+
+            loss = self._loss_function(pred, label)
             total_loss.append(loss.item())
 
         vali_loss = np.average(total_loss)
         self.model.train()
 
-        return vali_loss
+        return (100 * correct / total), vali_loss
 
     def train(self):
         time_now = time.time()
@@ -87,7 +95,7 @@ class Exp(object):
                 iter_count += 1
 
                 model_optim.zero_grad()
-                pred = self.model(data.float().to(device), mark.float().to(device))
+                pred = self.model(data.float().to(device), mark.float().to(device)) if args.model == 'ykw' else self.model(data.float().to(device))
                 loss = self._loss_function(pred, label.float().to(device))
                 train_loss.append(loss.item())
 
@@ -111,10 +119,10 @@ class Exp(object):
 
             train_loss = np.average(train_loss)
 
-            vali_loss = self.vali()
+            acc, vali_loss = self.vali()
 
-            log.info("Epoch: {0}, Steps: {1} | Train Loss: {2:.7f} Vali Loss: {3:.7f}".format(
-                epoch + 1, train_steps, train_loss, vali_loss))
+            log.info("Epoch: {0}, Steps: {1} | Train Loss: {2:.7f} Vali Loss: {3:.7f} Acc: {4:.2f}".format(
+                epoch + 1, train_steps, train_loss, vali_loss, acc))
             early_stopping(vali_loss, self.model, self.checkpoint_path(), self.params)
             if early_stopping.early_stop:
                 log.info("Early stopping")

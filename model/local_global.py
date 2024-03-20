@@ -2,13 +2,9 @@ import torch.nn as nn
 import torch
 
 
-class moving_avg(nn.Module):
-    """
-    Moving average block to highlight the trend of time series
-    """
-
-    def __init__(self, kernel_size, stride):
-        super(moving_avg, self).__init__()
+class MovingAvg(nn.Module):
+    def __init__(self, kernel_size, stride=1):
+        super(MovingAvg, self).__init__()
         self.kernel_size = kernel_size
         self.avg = nn.AvgPool1d(kernel_size=kernel_size, stride=stride, padding=0)
 
@@ -23,43 +19,20 @@ class moving_avg(nn.Module):
         return x
 
 
-class series_decomp(nn.Module):
-    """
-    Series decomposition block
-    """
-
+class MultiMovingAvg(nn.Module):
     def __init__(self, kernel_size):
-        super(series_decomp, self).__init__()
-        self.moving_avg = moving_avg(kernel_size, stride=1)
-
-    def forward(self, x):
-        moving_mean = self.moving_avg(x)
-        res = x - moving_mean
-        return res, moving_mean
-
-
-class series_decomp_multi(nn.Module):
-    """
-    Series decomposition block
-    """
-
-    def __init__(self, kernel_size):
-        super(series_decomp_multi, self).__init__()
+        super(MultiMovingAvg, self).__init__()
         self.kernel_size = kernel_size
-        self.moving_avg = [moving_avg(kernel, stride=1) for kernel in kernel_size]
+        self.moving_avg = [MovingAvg(kernel, stride=1) for kernel in kernel_size]
 
     def forward(self, x):
         moving_mean = []
-        res = []
         for func in self.moving_avg:
             moving_avg = func(x)
             moving_mean.append(moving_avg)
-            sea = x - moving_avg
-            res.append(sea)
 
-        sea = sum(res) / len(res)
         moving_mean = sum(moving_mean) / len(moving_mean)
-        return sea, moving_mean
+        return moving_mean
 
 
 class FeedForwardNetwork(nn.Module):
@@ -88,14 +61,10 @@ class FeedForwardNetwork(nn.Module):
             nn.init.constant_(x.bias, 0)
 
 
-class MIC(nn.Module):
-    """
-    MIC layer to extract local and global features
-    """
-
-    def __init__(self, seq_len, pred_len, num_hidden=512, n_heads=8, dropout=0.05, decomp_kernel=[32], conv_kernel=[24],
+class LGF(nn.Module):
+    def __init__(self, seq_len, num_hidden=512, n_heads=8, dropout=0.05, decomp_kernel=[32], conv_kernel=[24],
                  isometric_kernel=[18, 6], device='cuda'):
-        super(MIC, self).__init__()
+        super(LGF, self).__init__()
         self.conv_kernel = conv_kernel
         self.isometric_kernel = isometric_kernel
         self.device = device
@@ -115,11 +84,7 @@ class MIC(nn.Module):
                                                             kernel_size=i, padding=0, stride=i)
                                          for i in conv_kernel])
 
-        self.decomp = nn.ModuleList([series_decomp(k) for k in decomp_kernel])
-        self.regression = nn.ModuleList([nn.Linear(seq_len + pred_len, seq_len + pred_len) for _ in decomp_kernel])
-        for layer in self.regression:
-            self.regression.weight = nn.Parameter(
-                (1 / seq_len + pred_len) * torch.ones([seq_len + pred_len, seq_len + pred_len]), requires_grad=True)
+        self.decomp = nn.ModuleList([MovingAvg(k) for k in decomp_kernel])
 
         self.merge = torch.nn.Conv2d(in_channels=num_hidden, out_channels=num_hidden,
                                      kernel_size=(len(self.conv_kernel), 1))
@@ -156,10 +121,9 @@ class MIC(nn.Module):
         # multi-scale
         multi = []
         for i in range(len(self.conv_kernel)):
-            src_season, trend1 = self.decomp[i](src)
-            trend = self.regression[i](trend1.permute(0, 2, 1)).permute(0, 2, 1)
-            src_season = self.conv_trans_conv(src_season, self.conv[i], self.conv_trans[i], self.isometric_conv[i])
-            multi.append(src_season + trend)
+            src_avg = self.decomp[i](src)
+            src_avg = self.conv_trans_conv(src_avg, self.conv[i], self.conv_trans[i], self.isometric_conv[i])
+            multi.append(src_avg)
 
         # merge
         mg = torch.tensor([], device=self.device)
@@ -172,19 +136,22 @@ class MIC(nn.Module):
         return self.fnn_norm(mg + self.fnn(mg))
 
 
-class Seasonal_Prediction(nn.Module):
-    def __init__(self, seq_len, pred_len, num_hidden, mic_layers, decomp_kernel, out_features,
+class Fusion(nn.Module):
+    def __init__(self, seq_len, num_hidden, lgf_layers, decomp_kernel, classes,
                  conv_kernel, isometric_kernel, device, dropout=0.05):
-        super(Seasonal_Prediction, self).__init__()
+        super(Fusion, self).__init__()
 
-        self.mic = nn.ModuleList([MIC(seq_len=seq_len, pred_len=pred_len, num_hidden=num_hidden, dropout=dropout,
+        self.lgf = nn.ModuleList([LGF(seq_len=seq_len, num_hidden=num_hidden, dropout=dropout,
                                       decomp_kernel=decomp_kernel, conv_kernel=conv_kernel,
                                       isometric_kernel=isometric_kernel, device=device)
-                                  for i in range(mic_layers)])
+                                  for i in range(lgf_layers)])
 
-        self.projection = nn.Linear(num_hidden, out_features)
+        self.projection = nn.Linear(seq_len, 1)
+        self.classifier = nn.Linear(num_hidden, classes)
 
     def forward(self, x):
-        for mic_layer in self.mic:
-            x = mic_layer(x)
-        return self.projection(x)
+        for lgf_layer in self.lgf:
+            x = lgf_layer(x)
+        rst = self.classifier(self.projection(x.permute(0, 2, 1)).permute(0, 2, 1).squeeze(1))
+        out = nn.Softmax(dim=1)(rst)
+        return out
