@@ -36,7 +36,10 @@ setup_seed(args.seed)
 
 # Check if a GPU is available
 device = torch.device("cpu")
-if torch.cuda.is_available():
+if torch.backends.mps.is_available():
+    device = torch.device("mps")
+    log.info("GPU Available. Using mps GPU.")
+elif torch.cuda.is_available():
     device = torch.device(f"cuda:{args.gpu}")
     log.info("GPU Available. Using GPU[%d]: %s", args.gpu, torch.cuda.get_device_name(0))
 else:
