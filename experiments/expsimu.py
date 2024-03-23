@@ -2,6 +2,7 @@ import os
 import logging as log
 
 import pandas as pd
+import torch
 from torch import optim, nn
 from torch.utils.data import DataLoader
 from config.args import args, device
@@ -53,9 +54,15 @@ class Expsimu(Exp):
         vali_dataset = SIMU(val_file, val_label, mean, std)
         test_dataset = SIMU(test_file, test_label, mean, std)
 
+        self.train_dataset = torch.Tensor(train_dataset.data).to(device)
+        self.train_label = torch.Tensor(train_label).to(device)
+
         self.train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, drop_last=True)
         self.vali_loader = DataLoader(vali_dataset, batch_size=args.batch_size, shuffle=True, drop_last=True)
         self.test_loader = DataLoader(test_dataset, batch_size=args.batch_size, drop_last=True)
+
+    def _init_knn(self):
+        self.knn.fit(self.model(self.train_dataset), self.train_label)
 
     def _build_model(self, model_str):
         if model_str == 'ykw':

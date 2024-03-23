@@ -5,4 +5,4 @@ exps = {
     'rnn': rnn,
 }
 
-exps['adolescent']()
+exps['rnn']()
