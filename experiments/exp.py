@@ -9,35 +9,8 @@ from config.args import args, device
 from utils.tools import EarlyStopping, adjust_learning_rate
 
 
-class KNN:
-    def __init__(self, k=26):
-        self.k = k
-
-    def fit(self, X, y):
-        self.X_train = X.to(device)
-        self.y_train = torch.argmax(y.to(device), 1)
-
-    def predict(self, X):
-        y_pred = [self._predict(x) for x in X]
-        return torch.stack(y_pred, dim=0)
-
-    def _predict(self, x):
-        # 计算x与所有训练样本的欧氏距离
-        distances = [torch.norm(x - x_train) for x_train in self.X_train]
-        # 找到K个最近邻居的索引
-        k_indices = torch.topk(torch.tensor(distances), self.k, largest=False).indices
-        # 获取K个最近邻居的标签
-        k_nearest_labels = [self.y_train[i] for i in k_indices]
-        # 多数表决法来预测标签
-        most_common = torch.bincount(torch.tensor(k_nearest_labels)).argmax()
-        one_hot_tensor = torch.zeros(args.classes)
-        # Fill the corresponding index with 1
-        one_hot_tensor.scatter_(0, torch.LongTensor([most_common]), 1)
-        return one_hot_tensor.to(device)
-
-
 class Exp(object):
-    def __init__(self, setting: str, model_str: str):
+    def __init__(self, setting: str):
         log.info(args)
         self.setting = setting
         self.params = {}
@@ -45,8 +18,7 @@ class Exp(object):
         if not os.path.exists(_path):
             os.makedirs(_path)
         self._get_data()
-        self.model = self._build_model(model_str)
-        self.knn = KNN()
+        self.model = self._build_model()
         print(self.model)
 
     def _train_loader(self):
@@ -61,7 +33,7 @@ class Exp(object):
     def _init_knn(self):
         raise NotImplementedError
 
-    def _build_model(self, model_str):
+    def _build_model(self):
         raise NotImplementedError
 
     def _get_data(self):
@@ -84,26 +56,18 @@ class Exp(object):
     def vali(self):
         self.model.eval()
         total_loss = []
-        correct = 0
-        total = 0
 
-        for i, (data, mark, label) in enumerate(self._vali_loader()):
-            label = label.float().to(device)
-            total += label.size(0)
+        for i, (data, mark) in enumerate(self._vali_loader()):
+            x = data.float().to(device)
 
-            pred = self.model(data.float().to(device), mark.float().to(device)) if args.model == 'ykw' else self.model(data.float().to(device))
-            _, predicted = torch.max(pred, 1)
-            _, labels = torch.max(label, 1)
-            print(predicted)
-            correct += (predicted == labels).sum().item()
-
-            loss = self._loss_function(pred, label)
+            pred = self.model(x, mark.float().to(device))
+            loss = self._loss_function(pred, x)
             total_loss.append(loss.item())
 
         vali_loss = np.average(total_loss)
         self.model.train()
 
-        return (100 * correct / total), vali_loss
+        return vali_loss
 
     def train(self):
         time_now = time.time()
@@ -119,18 +83,18 @@ class Exp(object):
         best_model_path = os.path.join(self.checkpoint_path(), 'checkpoint.pth')
         for epoch in range(args.train_epochs):
             log.debug("=========================   epoch start   =========================")
-            self._init_knn()
 
             iter_count = 0
             train_loss = []
             self.model.train()
             epoch_time = time.time()
-            for i, (data, mark, label) in enumerate(self._train_loader()):
+            for i, (data, mark) in enumerate(self._train_loader()):
                 iter_count += 1
+                x = data.float().to(device)
 
                 model_optim.zero_grad()
-                pred = self.knn.predict(self.model(data.float().to(device), mark.float().to(device))) if args.model == 'ykw' else self.knn.predict(self.model(data.float().to(device)))
-                loss = self._loss_function(pred, label.float().to(device))
+                pred = self.model(x, mark.float().to(device))
+                loss = self._loss_function(pred, x)
                 train_loss.append(loss.item())
 
                 if (i + 1) % 100 == 0:
@@ -153,14 +117,14 @@ class Exp(object):
 
             train_loss = np.average(train_loss)
 
-            acc, vali_loss = self.vali()
+            vali_loss = self.vali()
 
-            log.info("Epoch: {0}, Steps: {1} | Train Loss: {2:.7f} Vali Loss: {3:.7f} Acc: {4:.2f}".format(
-                epoch + 1, train_steps, train_loss, vali_loss, acc))
+            log.info("Epoch: {0}, Steps: {1} | Train Loss: {2:.7f} Vali Loss: {3:.7f}".format(
+                epoch + 1, train_steps, train_loss, vali_loss))
             early_stopping(vali_loss, self.model, self.checkpoint_path(), self.params)
-            # if early_stopping.early_stop:
-            #     log.info("Early stopping")
-            #     break
+            if early_stopping.early_stop:
+                log.info("Early stopping")
+                break
 
             adjust_learning_rate(model_optim, epoch + 1)
 
