@@ -10,16 +10,16 @@ class extract_tensor(nn.Module):
 
 
 class TimeSeriesAutoencoder(nn.Module):
-    def __init__(self, input_size, hidden_size, latent_size, time_feature_size):
+    def __init__(self, input_size, embed_size, latent_size, time_feature_size):
         super(TimeSeriesAutoencoder, self).__init__()
         self.encoder = nn.Sequential(
-            nn.LSTM(input_size+time_feature_size, hidden_size, batch_first=True),
+            nn.LSTM(input_size+time_feature_size, embed_size, batch_first=True),
             extract_tensor(),
-            nn.Linear(hidden_size, latent_size)
+            nn.Linear(embed_size, latent_size)
         )
         self.decoder = nn.Sequential(
-            nn.Linear(latent_size, hidden_size),
-            nn.LSTM(hidden_size, input_size, batch_first=True)
+            nn.Linear(latent_size, embed_size),
+            nn.LSTM(embed_size, input_size, batch_first=True)
         )
 
     def forward(self, x):

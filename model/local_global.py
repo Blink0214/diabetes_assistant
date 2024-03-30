@@ -76,82 +76,76 @@ class FeedForwardNetwork(nn.Module):
             nn.init.constant_(x.bias, 0)
 
 
-class LGF(nn.Module):
-    def __init__(self, seq_len, decomp_kernel, conv_kernel, isometric_kernel,
-                 num_hidden=512, n_heads=8, dropout=0.05, device='cuda'):
-        super(LGF, self).__init__()
-        self.conv_kernel = conv_kernel
-        self.isometric_kernel = isometric_kernel
-        self.device = device
-
+class Encoder(nn.Module):
+    def __init__(self, seq_len, conv_kernel, isometric_kernel,
+                 num_embed=512, dropout=0.05, device='cuda'):
+        super(Encoder, self).__init__()
         # isometric convolution
-        self.isometric_conv = nn.ModuleList([nn.Conv1d(in_channels=num_hidden, out_channels=num_hidden,
+        self.isometric_conv = nn.ModuleList([nn.Conv1d(in_channels=num_embed, out_channels=num_embed,
                                                        kernel_size=i, padding=0, stride=1)
                                              for i in isometric_kernel])
 
         # downsampling convolution: padding=i//2, stride=i
-        self.conv = nn.ModuleList([nn.Conv1d(in_channels=num_hidden, out_channels=num_hidden,
+        self.conv = nn.ModuleList([nn.Conv1d(in_channels=num_embed, out_channels=num_embed,
                                              kernel_size=i, padding=i // 2, stride=i)
                                    for i in conv_kernel])
 
-        # upsampling convolution
-        self.conv_trans = nn.ModuleList([nn.ConvTranspose1d(in_channels=num_hidden, out_channels=num_hidden,
-                                                            kernel_size=i, padding=0, stride=i)
-                                         for i in conv_kernel])
-
-        self.decomp = nn.ModuleList([MovingAvg(k) for k in decomp_kernel])
-        # self.regression = nn.ModuleList([nn.Linear(seq_len + pred_len, seq_len + pred_len) for _ in decomp_kernel])
-        # for layer in self.regression:
-        #     self.regression.weight = nn.Parameter(
-        #         (1 / seq_len + pred_len) * torch.ones([seq_len + pred_len, seq_len + pred_len]), requires_grad=True)
-
-        self.merge = torch.nn.Conv2d(in_channels=num_hidden, out_channels=num_hidden,
+        self.merge = torch.nn.Conv2d(in_channels=num_embed, out_channels=num_embed,
                                      kernel_size=(len(self.conv_kernel), 1))
 
-        self.fnn = FeedForwardNetwork(num_hidden, num_hidden * 4, dropout)
-        self.fnn_norm = torch.nn.LayerNorm(num_hidden)
-
-        self.norm = torch.nn.LayerNorm(num_hidden)
+        self.norm = torch.nn.LayerNorm(num_embed)
         self.act = torch.nn.Tanh()
         self.drop = torch.nn.Dropout(dropout)
-
-    def conv_trans_conv(self, input_, conv1d, conv1d_trans, isometric):
-        batch, seq_len, channel = input_.shape
-        x = input_.permute(0, 2, 1)
-
-        # downsampling convolution
-        x1 = self.drop(self.act(conv1d(x)))
-        x = x1
-
-        # isometric convolution
-        zeros = torch.zeros((x.shape[0], x.shape[1], x.shape[2] - 1), device=self.device)
-        x = torch.cat((zeros, x), dim=-1)
-        x = self.drop(self.act(isometric(x)))
-        x = self.norm((x + x1).permute(0, 2, 1)).permute(0, 2, 1)
-
-        # upsampling convolution
-        x = self.drop(self.act(conv1d_trans(x)))
-        x = x[:, :, :seq_len]  # truncate
-
-        x = self.norm(x.permute(0, 2, 1) + input_)
-        return x
 
     def forward(self, src):
         # multi-scale
         multi = []
         for i in range(len(self.conv_kernel)):
-            # src_avg, trend1 = self.decomp[i](src)
-            # trend = self.regression[i](trend1.permute(0, 2, 1)).permute(0, 2, 1)
-            src_avg = self.conv_trans_conv(src, self.conv[i], self.conv_trans[i], self.isometric_conv[i])
-            multi.append(src_avg)
+            batch, seq_len, channel = src.shape
+            x = src.permute(0, 2, 1)
+
+            # downsampling convolution
+            x1 = self.drop(self.act(self.conv_kernel[i](x)))
+            x = x1
+
+            # isometric convolution
+            zeros = torch.zeros((x.shape[0], x.shape[1], x.shape[2] - 1), device=self.device)
+            x = torch.cat((zeros, x), dim=-1)
+            x = self.drop(self.act(self.isometric_conv[i](x)))
+            x = self.norm((x + x1).permute(0, 2, 1)).permute(0, 2, 1)
+
+            multi.append(x)
 
         # merge
         mg = torch.tensor([], device=self.device)
         for i in range(len(self.conv_kernel)):
             mg = torch.cat((mg, multi[i].unsqueeze(1)), dim=1)
-
-        # merge input: batch_size, num_hidden, multi-scale(conv_kernel), seq_len
+        # merge input: batch_size, num_embed, multi-scale(conv_kernel), seq_len
         mg = self.merge(mg.permute(0, 3, 1, 2)).squeeze(-2).permute(0, 2, 1)
+        return mg
 
-        return self.fnn_norm(mg + self.fnn(mg))
+
+class LGF(nn.Module):
+    def __init__(self, seq_len, conv_kernel, isometric_kernel,
+                 num_embed=512, dropout=0.05, device='cuda'):
+        super(LGF, self).__init__()
+        self.conv_kernel = conv_kernel
+        self.isometric_kernel = isometric_kernel
+        self.device = device
+
+        self.encoder = Encoder(seq_len, conv_kernel, isometric_kernel, num_embed, dropout)
+
+        # upsampling convolution
+        self.decoder = nn.ModuleList([nn.ConvTranspose1d(in_channels=num_embed, out_channels=num_embed,
+                                                            kernel_size=i, padding=0, stride=i)
+                                         for i in conv_kernel])
+
+        self.fnn = FeedForwardNetwork(num_embed, num_embed * 4, dropout)
+        self.fnn_norm = torch.nn.LayerNorm(num_embed)
+
+    def forward(self, src):
+        fusion = self.encoder(src)
+        out = self.decoder(fusion)
+
+        return self.fnn_norm(out + self.fnn(out))
 

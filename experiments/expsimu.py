@@ -93,10 +93,9 @@ class Expsimu(Exp):
 
     def _build_model(self):
         model = YKW(in_features=args.in_features, seq_len=args.seq_len,
-                    num_hidden=args.num_hidden,
+                    num_embed=args.num_embed,
                     dropout=args.dropout, freq=args.freq, device=device,
-                    decomp_kernel=args.decomp_kernel, conv_kernel=args.conv_kernel,
-                    isometric_kernel=args.isometric_kernel).float().to(device)
+                    conv_kernel=args.conv_kernel, isometric_kernel=args.isometric_kernel).float().to(device)
         total_params = sum(p.numel() for p in model.parameters())
         log.info(f'total parameters {total_params} ')
         total_trainable_params = sum(
