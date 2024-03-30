@@ -50,7 +50,7 @@ class Expknn(Exp):
         test_dataset = FinalData(1215, 1350)
 
         label_counts = [1.0] * len(literals)
-        self.weights = [0] * len(literals)
+        self.weights = [1] * len(literals)
         all_count = 1.0
         for recommendation in train_dataset.labels:
             for idx, l in enumerate(literals, start=0):

@@ -5,7 +5,7 @@ from experiments.expknn import Expknn
 
 
 def adolescent():
-    conv_kernel = [48, 60, 80]
+    conv_kernel = [48, 32, 24]
     isometric_kernel = []
     seq_len = 480
     # TODO
@@ -15,11 +15,12 @@ def adolescent():
         else:
             isometric_kernel.append((seq_len + ii - 1) // ii)
 
-    exp = Expsimu(name='ykw', num_embed=64, learning_rate=0.01, seq_len=seq_len, in_features=1, freq='min',
+    exp = Expsimu(name='ykw', num_embed=64, num_hidden=8, learning_rate=0.01, seq_len=seq_len, in_features=1,
+                  freq='min',
                   lgf_layers=1, conv_kernel=conv_kernel, isometric_kernel=isometric_kernel,
                   seed=2024, subject='adolescent', dataset_dir=os.path.join('.', 'datasets', 'TrainSet'))
-    exp.train()
-    # exp.test()
+    # exp.train()
+    exp.test()
 
 
 def rnn():

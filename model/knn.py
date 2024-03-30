@@ -14,7 +14,7 @@ class KNN:
         self.X_train = X.to(device)
         self.y_train = y.to(device)
         if not weights:
-            self.weights = [1] * len(self.classes)
+            self.weights = [1] * self.classes
         else:
             self.weights = weights
 

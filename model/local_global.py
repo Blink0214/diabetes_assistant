@@ -78,8 +78,9 @@ class FeedForwardNetwork(nn.Module):
 
 class Encoder(nn.Module):
     def __init__(self, seq_len, conv_kernel, isometric_kernel,
-                 num_embed=512, dropout=0.05, device='cuda'):
+                 num_embed=512, num_hidden=32, dropout=0.05, device='cuda'):
         super(Encoder, self).__init__()
+        self.device = device
         # isometric convolution
         self.isometric_conv = nn.ModuleList([nn.Conv1d(in_channels=num_embed, out_channels=num_embed,
                                                        kernel_size=i, padding=0, stride=1)
@@ -90,9 +91,6 @@ class Encoder(nn.Module):
                                              kernel_size=i, padding=i // 2, stride=i)
                                    for i in conv_kernel])
 
-        self.merge = torch.nn.Conv2d(in_channels=num_embed, out_channels=num_embed,
-                                     kernel_size=(len(self.conv_kernel), 1))
-
         self.norm = torch.nn.LayerNorm(num_embed)
         self.act = torch.nn.Tanh()
         self.drop = torch.nn.Dropout(dropout)
@@ -100,12 +98,12 @@ class Encoder(nn.Module):
     def forward(self, src):
         # multi-scale
         multi = []
-        for i in range(len(self.conv_kernel)):
+        for i in range(len(self.conv)):
             batch, seq_len, channel = src.shape
             x = src.permute(0, 2, 1)
 
             # downsampling convolution
-            x1 = self.drop(self.act(self.conv_kernel[i](x)))
+            x1 = self.drop(self.act(self.conv[i](x)))
             x = x1
 
             # isometric convolution
@@ -115,37 +113,53 @@ class Encoder(nn.Module):
             x = self.norm((x + x1).permute(0, 2, 1)).permute(0, 2, 1)
 
             multi.append(x)
-
-        # merge
-        mg = torch.tensor([], device=self.device)
-        for i in range(len(self.conv_kernel)):
-            mg = torch.cat((mg, multi[i].unsqueeze(1)), dim=1)
-        # merge input: batch_size, num_embed, multi-scale(conv_kernel), seq_len
-        mg = self.merge(mg.permute(0, 3, 1, 2)).squeeze(-2).permute(0, 2, 1)
-        return mg
+        return multi
 
 
 class LGF(nn.Module):
     def __init__(self, seq_len, conv_kernel, isometric_kernel,
-                 num_embed=512, dropout=0.05, device='cuda'):
+                 num_embed=512, num_hidden=32, dropout=0.05, device='cuda'):
         super(LGF, self).__init__()
-        self.conv_kernel = conv_kernel
-        self.isometric_kernel = isometric_kernel
         self.device = device
+        self.seq_len = seq_len
 
-        self.encoder = Encoder(seq_len, conv_kernel, isometric_kernel, num_embed, dropout)
+        self.encoder = Encoder(seq_len, conv_kernel, isometric_kernel, num_embed, num_hidden, dropout)
+
+        self.fnn = nn.ModuleList([nn.Linear(in_features=i, out_features=num_hidden)
+                                  for i in isometric_kernel])
 
         # upsampling convolution
-        self.decoder = nn.ModuleList([nn.ConvTranspose1d(in_channels=num_embed, out_channels=num_embed,
+        self.conv_trans = nn.ModuleList([nn.ConvTranspose1d(in_channels=num_embed, out_channels=num_embed,
                                                             kernel_size=i, padding=0, stride=i)
                                          for i in conv_kernel])
+
+        self.merge = torch.nn.Conv2d(in_channels=num_embed, out_channels=num_embed,
+                                     kernel_size=(len(conv_kernel), 1))
 
         self.fnn = FeedForwardNetwork(num_embed, num_embed * 4, dropout)
         self.fnn_norm = torch.nn.LayerNorm(num_embed)
 
+        self.norm = torch.nn.LayerNorm(num_embed)
+        self.act = torch.nn.Tanh()
+        self.drop = torch.nn.Dropout(dropout)
+
     def forward(self, src):
         fusion = self.encoder(src)
-        out = self.decoder(fusion)
 
-        return self.fnn_norm(out + self.fnn(out))
+        multi = []
+        for i in range(len(self.conv_trans)):
+            # upsampling convolution
+            x = self.drop(self.act(self.conv_trans[i](fusion[i])))
+            x = x[:, :, :self.seq_len]  # truncate
 
+            x = self.norm(x.permute(0, 2, 1) + src)
+            multi.append(x)
+
+        # merge
+        mg = torch.tensor([], device=self.device)
+        for i in multi:
+            mg = torch.cat((mg, i.unsqueeze(1)), dim=1)
+        # merge input: batch_size, num_hidden, multi-scale(conv_kernel), seq_len
+        mg = self.merge(mg.permute(0, 3, 1, 2)).squeeze(-2).permute(0, 2, 1)
+
+        return self.fnn_norm(mg + self.fnn(mg))

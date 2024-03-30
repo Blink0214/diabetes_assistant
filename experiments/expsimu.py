@@ -8,7 +8,8 @@ from torch.utils.data import DataLoader
 from config.args import args, device
 from data.dataset import SIMU4AE
 from experiments.exp import Exp
-from model.rnn import SimpleRNN
+from experiments.expknn import get_dummies, literals
+from model.knn import KNN
 from model.you_know_who import YKW
 
 
@@ -32,12 +33,12 @@ class Expsimu(Exp):
         test_file = []
         test_label = []
 
-        one_hot_encoded = pd.get_dummies(df['ExtractedValue'])
-        args.classes = one_hot_encoded.shape[1]
+        one_hot_encoded = get_dummies(df['ExtractedValue'])
+        args.classes = len(literals)
 
         for i, (index, row) in enumerate(df.iterrows(), start=1):
             path = os.path.join(directory_path, row['FileName'] + '.csv')
-            label = one_hot_encoded.loc[index].values
+            label = one_hot_encoded[index]
             if i % 10 == 0:
                 test_file.append(path)
                 test_label.append(label)
@@ -56,8 +57,8 @@ class Expsimu(Exp):
 
         self.train_dataset = train_dataset
         self.vali_dataset = vali_dataset
-        self.train_label = torch.Tensor(train_label).to(device)
-        self.val_label = torch.Tensor(val_label).to(device)
+        self.train_label = torch.tensor(train_label, dtype=torch.int).to(device)
+        self.val_label = torch.tensor(val_label, dtype=torch.int).to(device)
 
         self.train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, drop_last=True)
         self.vali_loader = DataLoader(vali_dataset, batch_size=args.batch_size, shuffle=True, drop_last=True)
@@ -66,6 +67,9 @@ class Expsimu(Exp):
     def test(self):
         self.load_model(os.path.join(self.checkpoint_path(), 'checkpoint.pth'))
         self.model.eval()
+
+        self.knn = KNN(k=26, classes=11)
+
         fusion = []
         with torch.no_grad():
             for data, time_stamp in zip(self.train_dataset.data, self.train_dataset.time_stamp):
@@ -73,8 +77,9 @@ class Expsimu(Exp):
                 x = torch.tensor(data[:l]).unsqueeze(0).reshape((-1, args.seq_len, data.shape[1])).float().to(device)
                 mark = torch.tensor(time_stamp[:l]).unsqueeze(0).reshape(
                     (-1, args.seq_len, time_stamp.shape[1])).float().to(device)
-                a = self.model.lgf(self.model.embedding(x, mark))
-                fusion.append(a.reshape(-1, a.shape[2]).mean(0))
+                a = self.model.lgf.encoder(self.model.embedding(x, mark))
+                b = [i.mean(dim=2) for i in a]
+                fusion.append(torch.stack(b, dim=2).flatten())
 
             self.knn.fit(torch.stack(fusion), self.train_label)
 
@@ -84,12 +89,15 @@ class Expsimu(Exp):
                 x = torch.tensor(data[:l]).unsqueeze(0).reshape((-1, args.seq_len, data.shape[1])).float().to(device)
                 mark = torch.tensor(time_stamp[:l]).unsqueeze(0).reshape(
                     (-1, args.seq_len, time_stamp.shape[1])).float().to(device)
-                a = self.model.lgf(self.model.embedding(x, mark))
-                vali.append(a.reshape(-1, a.shape[2]).mean(0))
+                a = self.model.lgf.encoder(self.model.embedding(x, mark))
+                b = [i.mean(dim=2) for i in a]
+                vali.append(torch.stack(b, dim=2).flatten())
 
             pred = self.knn.predict(torch.stack(vali))
             corrects = torch.sum(pred == self.val_label).item()
             print('acc', corrects / len(pred))
+            print('label', self.val_label)
+            print('pred', pred)
 
     def _build_model(self):
         model = YKW(in_features=args.in_features, seq_len=args.seq_len,
