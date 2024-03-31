@@ -64,7 +64,10 @@ class Expsimu(Exp):
         self.vali_loader = DataLoader(vali_dataset, batch_size=args.batch_size, shuffle=True, drop_last=True)
         self.test_loader = DataLoader(test_dataset, batch_size=args.batch_size, drop_last=True)
 
-    def test(self):
+    def next_phase(self):
+        self.classifier = None
+
+    def test_knn(self):
         self.load_model(os.path.join(self.checkpoint_path(), 'checkpoint.pth'))
         self.model.eval()
 

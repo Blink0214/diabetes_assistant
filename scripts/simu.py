@@ -20,7 +20,7 @@ def adolescent():
                   lgf_layers=1, conv_kernel=conv_kernel, isometric_kernel=isometric_kernel,
                   seed=2024, subject='adolescent', dataset_dir=os.path.join('.', 'datasets', 'TrainSet'))
     # exp.train()
-    exp.test()
+    exp.test_knn()
 
 
 def rnn():
