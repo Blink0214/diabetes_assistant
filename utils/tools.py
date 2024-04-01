@@ -15,7 +15,7 @@ def adjust_learning_rate(optimizer, epoch, adj_type='type1'):
             2: 5e-4, 4: 1e-4, 6: 5e-5, 8: 1e-5,
             10: 5e-6, 15: 1e-6, 20: 5e-7
         }
-    if epoch in lr_adjust.keys():
+    if epoch in lr_adjust.keys() and args.adjust_learning_rate:
         lr = lr_adjust[epoch]
         for param_group in optimizer.param_groups:
             param_group['lr'] = lr

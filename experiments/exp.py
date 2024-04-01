@@ -5,6 +5,8 @@ import time
 
 import numpy as np
 import torch
+from torch import nn
+
 from config.args import args, device
 from utils.tools import EarlyStopping, adjust_learning_rate
 
@@ -56,18 +58,30 @@ class Exp(object):
     def vali(self):
         self.model.eval()
         total_loss = []
+        acc = 0
 
-        for i, (data, mark) in enumerate(self._vali_loader()):
+        correct = 0
+        total = 0
+        for i, (data, mark, label) in enumerate(self._vali_loader()):
             x = data.float().to(device)
+            label = label.float().to(device)
+            total += len(label)
 
             pred = self.model(x, mark.float().to(device))
-            loss = self._loss_function(pred, x)
+            predicted = torch.argmax(pred, dim=1)
+            labels = torch.argmax(label, dim=1)
+            correct += (predicted == labels).sum().item()
+
+            loss = self._loss_function(pred, label)
             total_loss.append(loss.item())
+
+        if self.loss_func is nn.CrossEntropyLoss:
+            acc = (100 * correct / total)
 
         vali_loss = np.average(total_loss)
         self.model.train()
 
-        return vali_loss
+        return vali_loss, acc
 
     def train(self):
         time_now = time.time()
@@ -88,13 +102,13 @@ class Exp(object):
             train_loss = []
             self.model.train()
             epoch_time = time.time()
-            for i, (data, mark) in enumerate(self._train_loader()):
+            for i, (data, mark, label) in enumerate(self._train_loader()):
                 iter_count += 1
                 x = data.float().to(device)
 
                 model_optim.zero_grad()
                 pred = self.model(x, mark.float().to(device))
-                loss = self._loss_function(pred, x)
+                loss = self._loss_function(pred, label.float().to(device))
                 train_loss.append(loss.item())
 
                 if (i + 1) % 100 == 0:
@@ -117,12 +131,12 @@ class Exp(object):
 
             train_loss = np.average(train_loss)
 
-            vali_loss = self.vali()
+            vali_loss, acc = self.vali()
 
             log.info("Epoch: {0}, Steps: {1} | Train Loss: {2:.7f} Vali Loss: {3:.7f}".format(
-                epoch + 1, train_steps, train_loss, vali_loss))
+                epoch + 1, train_steps, train_loss, vali_loss) + (f" Acc: {acc:.2f}" if acc != 0 else ""))
             early_stopping(vali_loss, self.model, self.checkpoint_path(), self.params)
-            if early_stopping.early_stop:
+            if early_stopping.early_stop and args.early_stop:
                 log.info("Early stopping")
                 break
 

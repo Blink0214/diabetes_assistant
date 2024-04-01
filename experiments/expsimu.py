@@ -9,6 +9,7 @@ from config.args import args, device
 from data.dataset import SIMU4AE
 from experiments.exp import Exp
 from experiments.expknn import get_dummies, literals
+from model.classifier import CLS
 from model.knn import KNN
 from model.you_know_who import YKW
 
@@ -18,13 +19,15 @@ class Expsimu(Exp):
         for key, value in kwargs.items():
             setattr(args, key, value)
 
-        setting = f"{name}_if{args.in_features}-seed{args.seed}"
+        setting = f"{name}_em{args.num_embed}-hd{args.num_hidden}-seq{args.seq_len}"
         super(Expsimu, self).__init__(setting)
         self.params['args'] = args
 
+        self.loss_func = nn.MSELoss
+
     def _get_data(self):
-        directory_path = str(os.path.join(args.dataset_dir, args.subject))
-        label_path = str(os.path.join(args.dataset_dir, args.subject + '.csv'))
+        directory_path = str(os.path.join(args.dataset_dir, 'data'))
+        label_path = str(os.path.join(args.dataset_dir, 'extracted_values.csv'))
         df = pd.read_csv(label_path)
         train_file = []
         train_label = []
@@ -49,11 +52,11 @@ class Expsimu(Exp):
                 train_file.append(path)
                 train_label.append(label)
 
-        train_dataset = SIMU4AE(train_file)
+        train_dataset = SIMU4AE(train_file, train_label)
         mean, std = train_dataset.scaler.mean, train_dataset.scaler.std
         self.params['mean'], self.params['std'] = mean, std
-        vali_dataset = SIMU4AE(val_file, mean, std)
-        test_dataset = SIMU4AE(test_file, mean, std)
+        vali_dataset = SIMU4AE(val_file, val_label, mean, std)
+        test_dataset = SIMU4AE(test_file, test_label, mean, std)
 
         self.train_dataset = train_dataset
         self.vali_dataset = vali_dataset
@@ -65,7 +68,27 @@ class Expsimu(Exp):
         self.test_loader = DataLoader(test_dataset, batch_size=args.batch_size, drop_last=True)
 
     def next_phase(self):
-        self.classifier = None
+        encoder = self.model
+        self.model = CLS(scale_size=args.isometric_kernel, encoder=encoder).float().to(device)
+        self.train_dataset.as_day = False
+        self.vali_dataset.as_day = False
+        self.loss_func = nn.CrossEntropyLoss
+
+        self.setting = f"ykwcls_em{args.num_embed}-hd{args.num_hidden}-seq{args.seq_len}-cls{args.classes}"
+        _path = os.path.join(args.checkpoints, self.setting)
+        if not os.path.exists(_path):
+            os.makedirs(_path)
+
+        print(self.model)
+        total_trainable_params = sum(
+            p.numel() for p in self.model.parameters() if p.requires_grad)
+        log.info(f'training parameters {total_trainable_params} ')
+
+        args.train_epochs = 30
+        args.adjust_learning_rate = False
+        args.early_stop = False
+        args.learning_rate = 0.01
+        self.train()
 
     def test_knn(self):
         self.load_model(os.path.join(self.checkpoint_path(), 'checkpoint.pth'))
@@ -122,7 +145,7 @@ class Expsimu(Exp):
         return model_optim
 
     def _loss_function(self, pred, true):
-        criterion = nn.MSELoss()
+        criterion = self.loss_func()
         return criterion(pred, true)
 
     def _train_loader(self):

@@ -13,13 +13,16 @@ import torch.nn.functional as F
 
 
 class SIMU4AE(Dataset):
-    def __init__(self, files, mean=None, std=None):
+    def __init__(self, files, labels, mean=None, std=None, as_day=True):
         self.data = []
         self.time_stamp = []
+        self.labels = labels
+        self.as_day = as_day
 
         sample_count = []
         for path in files:
             df = pd.read_csv(path)
+            df = df[:len(df) - (len(df) % args.seq_len)]
 
             if args.univariate:
                 raw = df.iloc[:, [0, 1]]
@@ -62,13 +65,18 @@ class SIMU4AE(Dataset):
         return fidx, offset
 
     def __len__(self):
-        return self.cum_sum[-1]
+        return self.cum_sum[-1] if self.as_day else len(self.data)
 
     def __getitem__(self, index):
-        fidx, offset = self._parse_index(index)
-        offset = offset * (args.seq_len // 3)
-        x_end = offset + args.seq_len
-        return self.data[fidx][offset:x_end], self.time_stamp[fidx][offset:x_end]
+        if self.as_day:
+            fidx, offset = self._parse_index(index)
+            offset = offset * (args.seq_len // 3)
+            x_end = offset + args.seq_len
+            return self.data[fidx][offset:x_end], self.time_stamp[fidx][offset:x_end], self.data[fidx][offset:x_end]
+        else:
+            label = torch.zeros((11,))
+            label[self.labels[index]] = 1
+            return self.data[index], self.time_stamp[index], label
 
 
 class FinalData(Dataset):

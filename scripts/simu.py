@@ -16,11 +16,12 @@ def adolescent():
             isometric_kernel.append((seq_len + ii - 1) // ii)
 
     exp = Expsimu(name='ykw', num_embed=64, num_hidden=8, learning_rate=0.01, seq_len=seq_len, in_features=1,
-                  freq='min',
+                  freq='min', classes=11,
                   lgf_layers=1, conv_kernel=conv_kernel, isometric_kernel=isometric_kernel,
-                  seed=2024, subject='adolescent', dataset_dir=os.path.join('.', 'datasets', 'TrainSet'))
+                  seed=2024, subject='adolescent', dataset_dir=os.path.join('.', 'datasets', 'dl-TrainSet'))
     # exp.train()
     exp.test_knn()
+    # exp.next_phase()
 
 
 def rnn():

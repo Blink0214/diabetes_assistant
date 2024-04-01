@@ -16,9 +16,11 @@ parser.add_argument('--num_embed', type=int, default=512, help='dimension size o
 parser.add_argument('--univariate', action='store_true', help='use multiple gpus', default=True)
 
 # experiments
+parser.add_argument('--adjust_learning_rate', action='store_true', help='optimizer learning rate', default=True)
 parser.add_argument('--batch_size', type=int, default=32, help='batch size of train data')
 parser.add_argument('--checkpoints', type=str, default=os.path.join('.', 'checkpoints'),
                     help='location of model checkpoints')
+parser.add_argument('--early_stop', action='store_true', help='optimizer learning rate', default=True)
 parser.add_argument('--dataset_dir', type=str, default=os.path.join('.', 'datasets'), help='datasets root directory')
 parser.add_argument('--learning_rate', type=float, default=0.001, help='optimizer learning rate')
 parser.add_argument('--patience', type=int, default=3, help='early stopping patience')
