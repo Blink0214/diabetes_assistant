@@ -32,6 +32,7 @@ class CLS(nn.Module):
         self.softmax = nn.Softmax(dim=1)
 
     def forward(self, x, mark):
+        batch_size = x.shape[0]
         data = x.reshape((-1, args.seq_len, x.shape[2])).float().to(device)
         time_stamp = mark.reshape(
             (-1, args.seq_len, mark.shape[2])).float().to(device)
@@ -42,10 +43,10 @@ class CLS(nn.Module):
         rst = []
         for i, x in enumerate(multi_scale, start=0):
             out, _ = self.rnn1[i](x)
-            rst.append(out[:, -1, :].reshape(args.batch_size, -1, args.num_embed, 1))
+            rst.append(out[:, -1, :].reshape(batch_size, -1, args.num_embed, 1))
         # shape: batch_size, days, num_embed, multi_scale
         c = torch.concat(rst, dim=-1)
         fusion = self.conv(c.permute(0, 2, 1, 3).reshape(-1, 1, c.shape[1], c.shape[3]))
         out, _ = self.rnn2(fusion.reshape(-1, fusion.shape[2], 1))
-        c = self.softmax(self.fnn(self.act(self.norm(out[:, -1, :].reshape(args.batch_size, -1)))))
+        c = self.softmax(self.fnn(self.act(self.norm(out[:, -1, :].reshape(batch_size, -1)))))
         return c

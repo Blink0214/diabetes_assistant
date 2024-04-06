@@ -89,6 +89,24 @@ class Expsimu(Exp):
         args.early_stop = False
         args.learning_rate = 0.01
         self.train()
+        self.model.eval()
+        predicts = []
+        labels = []
+        for data, time_stamp, label in zip(self.vali_dataset.data, self.vali_dataset.time_stamp, self.val_label):
+            l = len(data) - (len(data) % args.seq_len)
+            x = torch.tensor(data[:l]).unsqueeze(0).reshape((-1, data.shape[1])).float().to(device)
+            mark = torch.tensor(time_stamp[:l]).unsqueeze(0).reshape(
+                (-1, time_stamp.shape[1])).float().to(device)
+            pred = self.model(x.unsqueeze(0), mark.unsqueeze(0))
+            predicted = torch.argmax(pred, dim=1).item()
+            predicts.append(predicted)
+            labels.append(label.item())
+
+        from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
+        print('accuracy_score', accuracy_score(labels, predicts))
+        print('precision_score', precision_score(labels, predicts, average='weighted'))
+        print('recall_score', recall_score(labels, predicts, average='weighted'))
+        print('f1_score', f1_score(labels, predicts, average='weighted'))
 
     def test_knn(self):
         self.load_model(os.path.join(self.checkpoint_path(), 'checkpoint.pth'))

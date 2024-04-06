@@ -20,9 +20,11 @@ class YKW(nn.Module):
         self.lgf = LGF(seq_len=seq_len, num_embed=num_embed, num_hidden=num_hidden, dropout=dropout,
                        conv_kernel=conv_kernel, isometric_kernel=isometric_kernel, device=device)
 
+        self.projection = nn.Linear(num_embed, out_features)
+
     def forward(self, x, mark):
         embedding = self.embedding(x, mark)
 
         out = self.lgf(embedding)
 
-        return out
+        return self.projection(out)
