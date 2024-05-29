@@ -1,8 +1,12 @@
 import torch.nn as nn
 import torch
 
-
+# 时间序列分析
 class MovingAvg(nn.Module):
+    '''
+    实现了移动平均的操作。在时间序列数据中，通过对每个时间点周围一定窗口内的数据取平均值，
+    可以平滑数据，去除噪音，从而更好地观察数据的整体趋势。
+    '''
     def __init__(self, kernel_size, stride=1):
         super(MovingAvg, self).__init__()
         self.kernel_size = kernel_size
@@ -20,6 +24,10 @@ class MovingAvg(nn.Module):
 
 
 class SeriesDecomp(nn.Module):
+    '''
+    将时间序列数据分解成趋势和季节两部分。它利用了MovingAvg类来计算移动平均，
+    然后从原始数据中减去移动平均部分得到趋势部分。
+    '''
     def __init__(self, kernel_size):
         super(SeriesDecomp, self).__init__()
         self.moving_avg = MovingAvg(kernel_size, stride=1)
@@ -31,6 +39,12 @@ class SeriesDecomp(nn.Module):
 
 
 class MultiSeriesDecomp(nn.Module):
+    '''
+    这个类是SeriesDecomp的扩展，可以处理多个时间序列数据。
+    它通过多次调用MovingAvg类来计算多个时间序列数据的移动平均，
+    并将每个时间序列数据减去对应的移动平均，
+    最后将所有处理后的数据求和取平均，得到趋势部分。
+    '''
     def __init__(self, kernel_size):
         super(MultiSeriesDecomp, self).__init__()
         self.kernel_size = kernel_size
@@ -51,6 +65,9 @@ class MultiSeriesDecomp(nn.Module):
 
 
 class FeedForwardNetwork(nn.Module):
+    '''
+    实现了一个前馈神经网络。它包括了两个线性层和一个ReLU激活函数，用于将输入数据映射到一个新的特征空间。
+    '''
     def __init__(self, in_feature, filter_size, dropout_rate=0.1):
         super(FeedForwardNetwork, self).__init__()
 
@@ -77,6 +94,9 @@ class FeedForwardNetwork(nn.Module):
 
 
 class Encoder(nn.Module):
+    '''
+    编码器，用于将原始时间序列数据编码成多尺度的特征表示。它包括了多个卷积层和一些标准化、激活和 dropout 操作，用于提取输入数据的特征。
+    '''
     def __init__(self, seq_len, conv_kernel, isometric_kernel,
                  num_embed=512, num_hidden=32, dropout=0.05, device='cuda'):
         super(Encoder, self).__init__()
@@ -117,13 +137,19 @@ class Encoder(nn.Module):
 
 
 class LGF(nn.Module):
+    '''
+    这个类实现了一个时间序列的低维空间特征表示模型。
+    它包括了一个编码器和一个解码器，通过编码器将原始时间序列数据编码成低维特征表示，
+    然后通过解码器将低维特征表示解码成原始时间序列数据。
+    '''
     def __init__(self, seq_len, conv_kernel, isometric_kernel,
                  num_embed=512, num_hidden=32, dropout=0.05, device='cuda'):
         super(LGF, self).__init__()
         self.device = device
         self.seq_len = seq_len
 
-        self.encoder = Encoder(seq_len, conv_kernel, isometric_kernel, num_embed, num_hidden, dropout)
+        # self.encoder = Encoder(seq_len, conv_kernel, isometric_kernel, num_embed, num_hidden, dropout)
+        self.encoder = Encoder(seq_len, conv_kernel, isometric_kernel, num_embed, num_hidden, dropout, device)
 
         self.fnn = nn.ModuleList([nn.Linear(in_features=i, out_features=num_hidden)
                                   for i in isometric_kernel])

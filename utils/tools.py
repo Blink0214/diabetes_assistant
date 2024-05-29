@@ -7,6 +7,9 @@ import logging as log
 
 
 def adjust_learning_rate(optimizer, epoch, adj_type='type1'):
+    '''
+    调整学习率
+    '''
     # lr = args.learning_rate * (0.2 ** (epoch // 2))
     if adj_type == 'type1':
         lr_adjust = {epoch: args.learning_rate * (0.75 ** ((epoch - 1) // 1))}
@@ -23,6 +26,9 @@ def adjust_learning_rate(optimizer, epoch, adj_type='type1'):
 
 
 class EarlyStopping:
+    '''
+    判断是否需要早停
+    '''
     def __init__(self, patience=7, verbose=False, delta=0):
         self.patience = patience
         self.verbose = verbose
@@ -65,6 +71,7 @@ class StandardScaler:
     def fit(self, data):
         self.mean = data.mean(0)
         self.std = data.std(0)
+        # print("平均值&标准差：",self.mean,self.std)
 
     def transform(self, data):
         mean = torch.from_numpy(self.mean).type_as(data).to(data.device) if torch.is_tensor(data) else self.mean
