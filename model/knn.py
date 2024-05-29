@@ -58,6 +58,8 @@ class KNN:
         # count = 1
         # for i in range(len(self.weights)):
         #     self.weights[i] = count / label_counts[i]
+
+        
         # for recommendation in train_dataset.labels:
         #     for idx, l in enumerate(literals, start=0):
         #         if recommendation == l:

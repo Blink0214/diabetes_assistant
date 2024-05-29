@@ -76,30 +76,7 @@ class SIMU4AE(Dataset):
         # print("标准化前：",self.data)
         # print("self.data的长度:", len(self.data))
         # for i, array in enumerate(self.data):
-        #     print(f"第 {i} 个元素的大小:", array.shape)
-
-        # for i, array in enumerate(self.data):
-        #     # 检查是否存在 NaN 值
-        #     if np.isnan(array).any():
-        #         print(f"数组 {i} 中存在 NaN 值")
-        #         # print(array)
-
-            # # 查找异常值
-            # Q1 = np.percentile(array, 25)
-            # Q3 = np.percentile(array, 75)
-            # IQR = Q3 - Q1
-            # lower_bound = Q1 - 1.5 * IQR
-            # upper_bound = Q3 + 1.5 * IQR
-            # outliers = array[(array < lower_bound) | (array > upper_bound)]
-            # if len(outliers) > 0:
-            #     print(f"数组 {i} 中存在异常值：{outliers}")
-
-        # for i, array in enumerate(self.data):
-        #     # 检查是否存在 NaN 值
-        #     print(i,"项",np.isnan(array).any())
-
-        #     # 查找异常值
-        #     print(np.percentile(array, [25, 50, 75]))  # 查看四分位数
+        #     print(f"第 {i} 个元素的大小:", array.shape
 
 
         # 根据参数mean和std是否为None来选择是否进行数据标准化处理，并存储一个StandardScaler对象用于后续的标准化。
@@ -151,9 +128,6 @@ class SIMU4AE(Dataset):
             x_end = offset + args.seq_len
             return self.data[fidx][offset:x_end], self.time_stamp[fidx][offset:x_end], self.data[fidx][offset:x_end]
         else:
-            # label = torch.zeros((11,))
-            # label = torch.zeros((35,))
-            # label = torch.zeros((12,))
             label = torch.zeros((33,))
             label[self.labels[index]] = 1
             return self.data[index], self.time_stamp[index], label

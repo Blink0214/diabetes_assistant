@@ -12,21 +12,23 @@ from experiments.exp import Exp
 from model.knn import KNN
 
 # 调整方式_模拟器
-# literals = [
-#     'increase_basal',
-#     'decrease_basal',
-#     'no_adjustment_recommended',
-#     'increase AM bolus',
-#     'decrease AM bolus',
-#     'increase PM bolus',
-#     'decrease PM bolus',
-#     'increase evening bolus',
-#     'decrease evening bolus',
-#     'increase overnight bolus',
-#     'decrease overnight bolus',
-# ]
+'''
+literals = [
+    'increase_basal',
+    'decrease_basal',
+    'no_adjustment_recommended',
+    'increase AM bolus',
+    'decrease AM bolus',
+    'increase PM bolus',
+    'decrease PM bolus',
+    'increase evening bolus',
+    'decrease evening bolus',
+    'increase overnight bolus',
+    'decrease overnight bolus',
+]'''
 
-''' 具体方案_删减_一天
+# 具体方案_删减_一天
+'''
 literals = [
     'YW 5',
     'YW 2、5',
@@ -66,7 +68,8 @@ literals = [
 ]
 '''
 
-'''具体方案_完整
+# 具体方案_完整
+'''
 literals = [
     'YW 5',
     'YW 2、5',
@@ -265,7 +268,6 @@ literals = [
     'CX 3、5 - 8',
 ]
 
-
 # 调整方式_三天
 '''literals = [
     'no adjustment',
@@ -355,10 +357,6 @@ class Expknn(Exp):
         '''
         用于构建k近邻模型。在这个方法中，创建了一个KNN类的实例，指定了k值和类别数量，并调用其fit方法来训练模型。最后返回训练好的模型。
         '''
-        # model = KNN(k=26, classes=11)
-        # model = KNN(k=26, classes=35)
-        # model = KNN(k=26, classes=12)
-        # model = KNN(k=26, classes=93)
-        model = KNN(k=26, classes=42)
+        model = KNN(k=26, classes=33)
         model.fit(self.train_dataset, self.train_label, self.weights)
         return model
