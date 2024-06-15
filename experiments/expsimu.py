@@ -15,7 +15,7 @@ from model.you_know_who import YKW
 from utils.timefeature import time_features
 from utils.tools import StandardScaler
 
-from sklearn.metrics import accuracy_score
+# from sklearn.metrics import accuracy_score
 
 # 基于pytorch的深度学习模型的训练框架
 class Expsimu(Exp):
@@ -103,7 +103,7 @@ class Expsimu(Exp):
         
         self.params['mean'], self.params['std'] = mean, std # 将均值和标准差存储在实验对象的参数字典中
         vali_dataset = SIMU4AE(val_file, val_label, mean, std)
-        test_dataset = SIMU4AE(test_file, test_label, mean, std)
+        # test_dataset = SIMU4AE(test_file, test_label, mean, std)
 
         self.train_dataset = train_dataset
         self.vali_dataset = vali_dataset
@@ -196,7 +196,7 @@ class Expsimu(Exp):
 
         # self.knn = KNN(k=26, classes=11)
         # self.knn = KNN(k=26, classes=35)
-        self.knn = KNN(k=30, classes=12, train_dataset=self.train_dataset, train_label=self.train_label)
+        self.knn = KNN(k=16, classes=33, train_dataset=self.train_dataset, train_label=self.train_label)
 
         fusion = []
         with torch.no_grad():
@@ -209,8 +209,7 @@ class Expsimu(Exp):
                     continue  # 如果l为0，则跳过这个样本
 
                 x = torch.tensor(data[:l]).unsqueeze(0).reshape((-1, args.seq_len, data.shape[1])).float().to(device)
-                mark = torch.tensor(time_stamp[:l]).unsqueeze(0).reshape(
-                    (-1, args.seq_len, time_stamp.shape[1])).float().to(device)
+                mark = torch.tensor(time_stamp[:l]).unsqueeze(0).reshape((-1, args.seq_len, time_stamp.shape[1])).float().to(device)
                 # 使用模型提取特征
                 '''self.model.embedding(x, mark) 将样本数据和时间戳作为输入传递给模型的嵌入层，
                 然后 self.model.lgf.encoder 对嵌入后的数据进行编码。'''

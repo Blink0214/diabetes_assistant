@@ -1,6 +1,7 @@
 from config.args import device
-from sklearn.neighbors import KNeighborsClassifier
+# from sklearn.neighbors import KNeighborsClassifier
 import torch
+import numpy as np
 
 literals = [
     'YW 5',
@@ -46,19 +47,17 @@ class KNN:
         self.k = k
         self.classes = classes
 
-        # label_counts = [1.0] * len(literals)
-        # self.weights = [1] * len(literals)
-        # all_count = 1.0
+        label_counts = [1.0] * len(literals)
+        self.weights = [1] * len(literals)
+        all_count = 1.0
 
-        # for recommendation in train_label:
-        #     for idx, l in enumerate(literals, start=0):
-        #         if recommendation == l:
-        #             label_counts[idx] += 1
-        #     all_count += 1
-        # count = 1
-        # for i in range(len(self.weights)):
-        #     self.weights[i] = count / label_counts[i]
-
+        for recommendation in train_label:
+            # print("所属类别：", recommendation.item())
+            label_counts[recommendation.item()] += 1
+            all_count += 1
+        count = 1
+        for i in range(len(self.weights)):
+            self.weights[i] = count / label_counts[i]
         
         # for recommendation in train_dataset.labels:
         #     for idx, l in enumerate(literals, start=0):
@@ -78,19 +77,21 @@ class KNN:
         self.X_train = X.to(device)
         self.y_train = y.to(device)
 
-        if not weights:
-            self.weights = [1] * self.classes
-        else:
-            self.weights = weights
+        # if not weights:
+        #     self.weights = [1] * self.classes
+        # else:
+        #     self.weights = weights
         # self.knn.fit(X=X,y=y)
         
 
     def predict(self, X):
         # 对给定的输入数据 X 进行预测。
         y_pred = [self._predict(x) for x in X]
+        # print("预测数据类型：",type(y_pred))
+        # print("预测数据：",y_pred)
         return torch.tensor(y_pred).to(device)
 
-        return self.knn.predict(X=X)
+        # return self.knn.predict(X=X)
 
     def _predict(self, x):
         # 计算x与所有训练样本的欧氏距离
@@ -100,13 +101,38 @@ class KNN:
         # 获取K个最近邻居的标签
         k_nearest_labels = [self.y_train[i] for i in k_indices]
 
+        # 计算权重
+        # 计算基于距离的加权权重
+        distances = torch.tensor(distances)
+        distances = distances[k_indices]
+        # distances_weights = 1.0 / distances  # 基于距离的加权权重
+        distances_weights = torch.exp(-distances**2 / (2 * 0.3**2))  # 高斯函数形式的加权权重
+
+        # print("距离权重：", distances_weights)
+
+        # 计算基于类别数量的加权权重
+        # 取出相应的权重值列表
+        class_weights = torch.tensor([self.weights[label] for label in k_nearest_labels])
+        # class_weights = torch.tensor(class_weights).sqrt()
+        # print("类别权重：", class_weights)
+
+        # print("邻居标签：", np.array([tensor.numpy() for tensor in k_nearest_labels]))
+
         # 统计每个标签的票数
-        label_counts = torch.bincount(torch.tensor(k_nearest_labels))
+        # label_counts = torch.bincount(torch.tensor(k_nearest_labels))
+        # label_counts = torch.bincount(torch.tensor(k_nearest_labels), weights = distances_weights)
+        label_counts = torch.bincount(torch.tensor(k_nearest_labels), weights = class_weights)
+
+        # print("邻居标签统计：", label_counts)
         
         # 找到前3个最高票数的标签
         top_three_labels_indices = torch.argsort(label_counts, descending=True)[:3]
         top_three_labels = top_three_labels_indices.tolist()
-        
+
+        # 如果top_three_labels的长度小于3，则填充默认标签
+        while len(top_three_labels) < 3:
+            top_three_labels.append(-1)
+            
         return top_three_labels
 
         # 多数表决法来预测标签      
